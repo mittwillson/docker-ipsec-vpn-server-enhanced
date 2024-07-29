@@ -202,6 +202,10 @@ if [ -n "$VPN_L2TP_POOL" ]; then
   VPN_L2TP_POOL=$(nospaces "$VPN_L2TP_POOL")
   VPN_L2TP_POOL=$(noquotes "$VPN_L2TP_POOL")
 fi
+if [ -n "$VPN_L2TP_IPSEC_DISABLE" ]; then
+  VPN_L2TP_IPSEC_DISABLE=$(nospaces "$VPN_L2TP_IPSEC_DISABLE")
+  VPN_L2TP_IPSEC_DISABLE=$(noquotes "$VPN_L2TP_IPSEC_DISABLE")
+fi
 if [ -n "$VPN_XAUTH_NET" ]; then
   VPN_XAUTH_NET=$(nospaces "$VPN_XAUTH_NET")
   VPN_XAUTH_NET=$(noquotes "$VPN_XAUTH_NET")
@@ -209,6 +213,10 @@ fi
 if [ -n "$VPN_XAUTH_POOL" ]; then
   VPN_XAUTH_POOL=$(nospaces "$VPN_XAUTH_POOL")
   VPN_XAUTH_POOL=$(noquotes "$VPN_XAUTH_POOL")
+fi
+if [ -n "$VPN_DISABLE_IPTABLES" ]; then
+  VPN_DISABLE_IPTABLES=$(nospaces "$VPN_DISABLE_IPTABLES")
+  VPN_DISABLE_IPTABLES=$(noquotes "$VPN_DISABLE_IPTABLES")
 fi
 
 if [ -z "$VPN_IPSEC_PSK" ] || [ -z "$VPN_USER" ] || [ -z "$VPN_PASSWORD" ]; then
@@ -335,6 +343,18 @@ case $VPN_IKEV2_ONLY in
   [yY][eE][sS])
     disable_ipsec_l2tp=yes
     disable_ipsec_xauth=yes
+    ;;
+esac
+disable_l2tp_ipsec=no
+case $VPN_L2TP_IPSEC_DISABLE in
+  [yY][eE][sS])
+    disable_l2tp_ipsec=yes
+    ;;
+esac
+disable_iptables=no
+case $VPN_DISABLE_IPTABLES in 
+  [yY][eE][sS])
+    disable_iptables=yes
     ;;
 esac
 ike_algs="aes256-sha2;modp2048,aes128-sha2;modp2048,aes256-sha1;modp2048,aes128-sha1;modp2048"
@@ -560,53 +580,54 @@ if modprobe -q tcp_bbr 2>/dev/null \
   $syt net.ipv4.tcp_congestion_control=bbr 2>/dev/null
 fi
 
-# Create IPTables rules
-ipi='iptables -I INPUT'
-ipf='iptables -I FORWARD'
-ipp='iptables -t nat -I POSTROUTING'
-res='RELATED,ESTABLISHED'
-modprobe -q ip_tables 2>/dev/null
-if ! iptables -t nat -C POSTROUTING -s "$L2TP_NET" -o "$NET_IFACE" -j MASQUERADE 2>/dev/null; then
-  $ipi 1 -p udp --dport 1701 -m policy --dir in --pol none -j DROP
-  $ipi 2 -m conntrack --ctstate INVALID -j DROP
-  $ipi 3 -m conntrack --ctstate "$res" -j ACCEPT
-  $ipi 4 -p udp -m multiport --dports 500,4500 -j ACCEPT
-  $ipi 5 -p udp --dport 1701 -m policy --dir in --pol ipsec -j ACCEPT
-  $ipi 6 -p udp --dport 1701 -j DROP
-  $ipf 1 -m conntrack --ctstate INVALID -j DROP
-  $ipf 2 -i "$NET_IFACE" -o ppp+ -m conntrack --ctstate "$res" -j ACCEPT
-  $ipf 3 -i ppp+ -o "$NET_IFACE" -j ACCEPT
-  $ipf 4 -i ppp+ -o ppp+ -j ACCEPT
-  $ipf 5 -i "$NET_IFACE" -d "$XAUTH_NET" -m conntrack --ctstate "$res" -j ACCEPT
-  $ipf 6 -s "$XAUTH_NET" -o "$NET_IFACE" -j ACCEPT
-  $ipf 7 -s "$XAUTH_NET" -o ppp+ -j ACCEPT
-  # Client-to-client traffic is allowed by default. To *disallow* such traffic,
-  # uncomment below and restart the Docker container.
-  # $ipf 2 -i ppp+ -o ppp+ -s "$L2TP_NET" -d "$L2TP_NET" -j DROP
-  # $ipf 3 -s "$XAUTH_NET" -d "$XAUTH_NET" -j DROP
-  # $ipf 4 -i ppp+ -d "$XAUTH_NET" -j DROP
-  # $ipf 5 -s "$XAUTH_NET" -o ppp+ -j DROP
-  iptables -A FORWARD -j DROP
-  if ! $ipp -s "$XAUTH_NET" -o "$NET_IFACE" -m policy --dir out --pol none -j MASQUERADE; then
-    $ipp -s "$XAUTH_NET" -o "$NET_IFACE" ! -d "$XAUTH_NET" -j MASQUERADE
+if [ "$disable_iptables" != yes ]; then 
+  # Create IPTables rules
+  ipi='iptables -I INPUT'
+  ipf='iptables -I FORWARD'
+  ipp='iptables -t nat -I POSTROUTING'
+  res='RELATED,ESTABLISHED'
+  modprobe -q ip_tables 2>/dev/null
+  if ! iptables -t nat -C POSTROUTING -s "$L2TP_NET" -o "$NET_IFACE" -j MASQUERADE 2>/dev/null; then
+    [ "$disable_l2tp_ipsec" != yes ] && $ipi 1 -p udp --dport 1701 -m policy --dir in --pol none -j DROP
+    $ipi 2 -m conntrack --ctstate INVALID -j DROP
+    $ipi 3 -m conntrack --ctstate "$res" -j ACCEPT
+    $ipi 4 -p udp -m multiport --dports 500,4500 -j ACCEPT
+    $ipi 5 -p udp --dport 1701 -m policy --dir in --pol ipsec -j ACCEPT
+    [ "$disable_l2tp_ipsec" != yes ] && $ipi 6 -p udp --dport 1701 -j DROP
+    $ipf 1 -m conntrack --ctstate INVALID -j DROP
+    $ipf 2 -i "$NET_IFACE" -o ppp+ -m conntrack --ctstate "$res" -j ACCEPT
+    $ipf 3 -i ppp+ -o "$NET_IFACE" -j ACCEPT
+    $ipf 4 -i ppp+ -o ppp+ -j ACCEPT
+    $ipf 5 -i "$NET_IFACE" -d "$XAUTH_NET" -m conntrack --ctstate "$res" -j ACCEPT
+    $ipf 6 -s "$XAUTH_NET" -o "$NET_IFACE" -j ACCEPT
+    $ipf 7 -s "$XAUTH_NET" -o ppp+ -j ACCEPT
+    # Client-to-client traffic is allowed by default. To *disallow* such traffic,
+    # uncomment below and restart the Docker container.
+    # $ipf 2 -i ppp+ -o ppp+ -s "$L2TP_NET" -d "$L2TP_NET" -j DROP
+    # $ipf 3 -s "$XAUTH_NET" -d "$XAUTH_NET" -j DROP
+    # $ipf 4 -i ppp+ -d "$XAUTH_NET" -j DROP
+    # $ipf 5 -s "$XAUTH_NET" -o ppp+ -j DROP
+    iptables -A FORWARD -j DROP
+    if ! $ipp -s "$XAUTH_NET" -o "$NET_IFACE" -m policy --dir out --pol none -j MASQUERADE; then
+      $ipp -s "$XAUTH_NET" -o "$NET_IFACE" ! -d "$XAUTH_NET" -j MASQUERADE
+    fi
+    $ipp -s "$L2TP_NET" -o "$NET_IFACE" -j MASQUERADE
   fi
-  $ipp -s "$L2TP_NET" -o "$NET_IFACE" -j MASQUERADE
+
+  case $VPN_ANDROID_MTU_FIX in
+    [yY][eE][sS])
+      echo
+      echo "Applying fix for Android MTU/MSS issues..."
+      iptables -t mangle -A FORWARD -m policy --pol ipsec --dir in \
+        -p tcp -m tcp --tcp-flags SYN,RST SYN -m tcpmss --mss 1361:1536 \
+        -j TCPMSS --set-mss 1360
+      iptables -t mangle -A FORWARD -m policy --pol ipsec --dir out \
+        -p tcp -m tcp --tcp-flags SYN,RST SYN -m tcpmss --mss 1361:1536 \
+        -j TCPMSS --set-mss 1360
+      echo 1 > /proc/sys/net/ipv4/ip_no_pmtu_disc
+      ;;
+  esac
 fi
-
-case $VPN_ANDROID_MTU_FIX in
-  [yY][eE][sS])
-    echo
-    echo "Applying fix for Android MTU/MSS issues..."
-    iptables -t mangle -A FORWARD -m policy --pol ipsec --dir in \
-      -p tcp -m tcp --tcp-flags SYN,RST SYN -m tcpmss --mss 1361:1536 \
-      -j TCPMSS --set-mss 1360
-    iptables -t mangle -A FORWARD -m policy --pol ipsec --dir out \
-      -p tcp -m tcp --tcp-flags SYN,RST SYN -m tcpmss --mss 1361:1536 \
-      -j TCPMSS --set-mss 1360
-    echo 1 > /proc/sys/net/ipv4/ip_no_pmtu_disc
-    ;;
-esac
-
 # Update file attributes
 chmod 600 /etc/ipsec.secrets /etc/ppp/chap-secrets /etc/ipsec.d/passwd
 
