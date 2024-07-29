@@ -30,7 +30,7 @@ on:
 jobs:
   buildx:
     runs-on: ubuntu-22.04
-    if: github.repository_owner == 'hwdsl2'
+    if: github.repository_owner == 'mittwillson'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -102,11 +102,11 @@ jobs:
           DOCKER_USER: ${{ github.repository_owner }}
           DOCKER_TOKEN: ${{ secrets.DOCKER_TOKEN }}
         run: echo "$DOCKER_TOKEN" | docker login --username "$DOCKER_USER" --password-stdin 2>&1
-      - name: Quay.io Login
-        env:
-          QUAY_USER: ${{ secrets.QUAY_USER }}
-          QUAY_TOKEN: ${{ secrets.QUAY_TOKEN }}
-        run: echo "$QUAY_TOKEN" | docker login quay.io --username "$QUAY_USER" --password-stdin 2>&1
+      # - name: Quay.io Login
+      #   env:
+      #     QUAY_USER: ${{ secrets.QUAY_USER }}
+      #     QUAY_TOKEN: ${{ secrets.QUAY_TOKEN }}
+      #   run: echo "$QUAY_TOKEN" | docker login quay.io --username "$QUAY_USER" --password-stdin 2>&1
       - name: Docker Buildx
         env:
           DOCKER_USER: ${{ github.repository_owner }}
@@ -134,18 +134,6 @@ jobs:
               --pull \
               ${BUILD_ONLY:+--push} \
               .
-
-            docker buildx build \
-              --progress plain \
-              --platform=linux/amd64,linux/arm64,linux/arm/v7 \
-              --build-arg BUILD_DATE=$ts_now \
-              --build-arg VCS_REF=${GITHUB_SHA::8} \
-              --build-arg VERSION=alpine-latest \
-              --cache-from type=local,src="${RUNNER_TEMP}/.buildx-cache-new" \
-              -t "quay.io/$DOCKER_USER/ipsec-vpn-server:latest" \
-              --pull \
-              ${BUILD_ONLY:+--push} \
-              .
           elif [ "$OS_TYPE" = "debian" ]; then
             docker buildx build \
               --progress plain \
@@ -157,19 +145,6 @@ jobs:
               --cache-to type=local,dest="${RUNNER_TEMP}/.buildx-cache-new" \
               -f Dockerfile.debian \
               -t "$DOCKER_USER/ipsec-vpn-server:debian" \
-              --pull \
-              ${BUILD_ONLY:+--push} \
-              .
-
-            docker buildx build \
-              --progress plain \
-              --platform=linux/amd64,linux/arm64,linux/arm/v7 \
-              --build-arg BUILD_DATE=$ts_now \
-              --build-arg VCS_REF=${GITHUB_SHA::8} \
-              --build-arg VERSION=debian-latest \
-              --cache-from type=local,src="${RUNNER_TEMP}/.buildx-cache-new" \
-              -f Dockerfile.debian \
-              -t "quay.io/$DOCKER_USER/ipsec-vpn-server:debian" \
               --pull \
               ${BUILD_ONLY:+--push} \
               .
