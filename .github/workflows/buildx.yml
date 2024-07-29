@@ -20,10 +20,10 @@ on:
         required: true
       DOCKER_TOKEN:
         required: true
-      QUAY_USER:
-        required: true
-      QUAY_TOKEN:
-        required: true
+      # QUAY_USER:
+      #   required: true
+      # QUAY_TOKEN:
+      #   required: true
       BUILD_ONLY:
         required: true
 
