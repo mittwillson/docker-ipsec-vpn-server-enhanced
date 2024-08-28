@@ -114,6 +114,8 @@ VPN_USER=$(nospaces "$VPN_USER")
 VPN_USER=$(noquotes "$VPN_USER")
 VPN_PASSWORD=$(nospaces "$VPN_PASSWORD")
 VPN_PASSWORD=$(noquotes "$VPN_PASSWORD")
+VPN_IP_ADDR=$(noquotes "$VPN_IP_ADDR")
+VPN_IP_ADDR=${VPN_IP_ADDR:-'*'}
 if [ -n "$VPN_ADDL_USERS" ] && [ -n "$VPN_ADDL_PASSWORDS" ]; then
   VPN_ADDL_USERS=$(nospaces "$VPN_ADDL_USERS")
   VPN_ADDL_USERS=$(noquotes "$VPN_ADDL_USERS")
@@ -515,7 +517,7 @@ fi
 
 # Create VPN credentials
 cat > /etc/ppp/chap-secrets <<EOF
-"$VPN_USER" l2tpd "$VPN_PASSWORD" *
+"$VPN_USER" l2tpd "$VPN_PASSWORD" $VPN_IP_ADDR
 EOF
 
 VPN_PASSWORD_ENC=$(openssl passwd -1 "$VPN_PASSWORD")
