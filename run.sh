@@ -116,6 +116,7 @@ VPN_PASSWORD=$(nospaces "$VPN_PASSWORD")
 VPN_PASSWORD=$(noquotes "$VPN_PASSWORD")
 VPN_IP_ADDR=$(noquotes "$VPN_IP_ADDR")
 VPN_IP_ADDR=${VPN_IP_ADDR:-'*'}
+VPN_IPSEC_LEFT_DEFAULT=${VPN_IPSEC_LEFT_DEFAULT:-'yes'}
 if [ -n "$VPN_ADDL_USERS" ] && [ -n "$VPN_ADDL_PASSWORDS" ]; then
   VPN_ADDL_USERS=$(nospaces "$VPN_ADDL_USERS")
   VPN_ADDL_USERS=$(noquotes "$VPN_ADDL_USERS")
@@ -219,6 +220,10 @@ fi
 if [ -n "$VPN_DISABLE_IPTABLES" ]; then
   VPN_DISABLE_IPTABLES=$(nospaces "$VPN_DISABLE_IPTABLES")
   VPN_DISABLE_IPTABLES=$(noquotes "$VPN_DISABLE_IPTABLES")
+fi
+if [ -n "$VPN_IPSEC_LEFT_DEFAULT" ]; then
+  VPN_IPSEC_LEFT_DEFAULT=$(nospaces "$VPN_IPSEC_LEFT_DEFAULT")
+  VPN_IPSEC_LEFT_DEFAULT=$(noquotes "$VPN_IPSEC_LEFT_DEFAULT")
 fi
 
 if [ -z "$VPN_IPSEC_PSK" ] || [ -z "$VPN_USER" ] || [ -z "$VPN_PASSWORD" ]; then
@@ -359,6 +364,12 @@ case $VPN_DISABLE_IPTABLES in
     disable_iptables=yes
     ;;
 esac
+ipsec_left=$public_ip
+case $VPN_IPSEC_LEFT_DEFAULT in
+  [yY][eE][sS])
+    ipsec_left="%defaultroute"
+    ;;
+esac
 ike_algs="aes256-sha2;modp2048,aes128-sha2;modp2048,aes256-sha1;modp2048,aes128-sha1;modp2048"
 ike_algs_addl_1=",aes256-sha2;modp1024,aes128-sha1;modp1024"
 ike_algs_addl_2=",aes256-sha2;modp1536,aes128-sha1;modp1536"
@@ -412,7 +423,7 @@ config setup
   uniqueids=no
 
 conn shared
-  left=%defaultroute
+  left=$ipsec_left
   leftid=$public_ip
   right=%any
   encapsulation=yes
